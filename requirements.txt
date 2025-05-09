@@ -3,3 +3,4 @@ pandas
 fastai
 scikit-learn
 plotly
+gdown
