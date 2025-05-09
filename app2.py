@@ -1,18 +1,23 @@
 import streamlit as st
 import pandas as pd
 import os
+import urllib.request
 from fastai.collab import load_learner
 import plotly.express as px
 
-# --- Caching Functions ---
+# --- Model Setup (downloads from Google Drive) ---
+MODEL_URL = 'https://drive.google.com/uc?export=download&id=1kzap_V1lrv7ihUk3dVD4waijxLRxHunJ'
+MODEL_PATH = 'models/book_recommender_latest.pkl'
+
 @st.cache_resource
 def load_model():
-    path = 'models/book_recommender_latest.pkl'
-    if not os.path.exists(path):
-        st.error(f"❌ Model not found at `{path}`.")
-        st.stop()
-    return load_learner(path)
+    if not os.path.exists(MODEL_PATH):
+        os.makedirs('models', exist_ok=True)
+        with st.spinner("🔽 Downloading model from Google Drive..."):
+            urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+    return load_learner(MODEL_PATH)
 
+# --- Load Data ---
 @st.cache_data
 def load_ratings_data():
     path = 'Ratings_cleaned.csv'
@@ -82,7 +87,7 @@ with col2:
 
 short_id = user_id[-4:] if len(user_id) > 4 else user_id
 
-# --- Get Recommendations ---
+# --- Recommendations ---
 if st.button("🔍 Get Recommendations"):
     st.subheader(f"📖 Books Rated by User #{short_id}")
 
@@ -95,7 +100,6 @@ if st.button("🔍 Get Recommendations"):
     if not rated_view.empty:
         st.dataframe(rated_view.reset_index(drop=True), use_container_width=True)
 
-        # 📊 Improved histogram for real ratings
         st.markdown("### 📊 How You Usually Rate Books")
         st.caption("This chart shows how often you gave each rating (1 = worst, 10 = best)")
         fig1 = px.histogram(
@@ -143,9 +147,8 @@ if st.button("🔍 Get Recommendations"):
             top_view['Predicted Rating'] = top_view['Predicted Rating'].round(2)
             st.dataframe(top_view.reset_index(drop=True), use_container_width=True)
 
-            # 📊 Improved histogram for predicted ratings
             st.markdown("### 📊 How the AI Thinks You'll Rate New Books")
-            st.caption("This chart shows the model’s guesses for how you’ll rate unseen books")
+            st.caption("This chart shows the model’s guesses for how you’ll rate books you haven’t read yet")
             fig2 = px.histogram(
                 unseen_df,
                 x='predicted_rating',
