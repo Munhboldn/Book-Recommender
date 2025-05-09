@@ -1,6 +1,8 @@
-streamlit
-pandas
-fastai
-scikit-learn
-plotly
-gdown
+streamlit==1.33.0
+pandas==2.2.2
+numpy==1.24.4
+fastai==2.7.12
+fastcore==1.5.29
+torch==1.13.1
+torchvision==0.14.1
+gdown==5.1.0
