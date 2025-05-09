@@ -1,20 +1,20 @@
 import streamlit as st
 import pandas as pd
 import os
-import urllib.request
+import gdown
 from fastai.collab import load_learner
 import plotly.express as px
 
-# --- Model Setup (downloads from Google Drive) ---
-MODEL_URL = 'https://drive.google.com/uc?export=download&id=1kzap_V1lrv7ihUk3dVD4waijxLRxHunJ'
-MODEL_PATH = 'models/book_recommender_latest.pkl'
+# --- Model Setup ---
+MODEL_URL = "https://drive.google.com/uc?id=1kzap_V1lrv7ihUk3dVD4waijxLRxHunJ"
+MODEL_PATH = "models/book_recommender_latest.pkl"
 
 @st.cache_resource
 def load_model():
     if not os.path.exists(MODEL_PATH):
-        os.makedirs('models', exist_ok=True)
+        os.makedirs("models", exist_ok=True)
         with st.spinner("🔽 Downloading model from Google Drive..."):
-            urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+            gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
     return load_learner(MODEL_PATH)
 
 # --- Load Data ---
@@ -42,7 +42,7 @@ def load_books_data():
 # --- App Setup ---
 st.set_page_config("📚 Book Recommender", layout="wide")
 st.title("📚 Personalized Book Recommender")
-st.markdown("Get AI-powered book recommendations based on user ratings.")
+st.markdown("Get AI-powered book recommendations based on your past ratings.")
 st.markdown("---")
 
 with st.spinner("🔄 Loading model and data..."):
@@ -55,7 +55,6 @@ with st.sidebar:
     st.header("📦 Dataset Info")
     st.markdown(f"**Ratings:** {len(ratings):,}")
     st.markdown(f"**Books:** {books['book_id'].nunique():,}")
-    st.markdown("Only books rated by ≥ 5 users are used for prediction.")
     st.markdown("---")
     st.caption("Built with FastAI + Streamlit")
 
@@ -77,20 +76,18 @@ top_users_df = get_top_users(ratings)
 col1, col2 = st.columns([3, 1])
 with col1:
     user_id = st.selectbox(
-        "Select a User (Top 100 most active)",
+        "Select a User (Top 100 active users)",
         options=top_users_df['user_id'].tolist(),
         format_func=lambda x: f"User {x}"
     )
 with col2:
     num = top_users_df[top_users_df['user_id'] == user_id]['num_ratings'].values[0]
     st.metric("Ratings by User", f"{num}")
-
 short_id = user_id[-4:] if len(user_id) > 4 else user_id
 
 # --- Recommendations ---
 if st.button("🔍 Get Recommendations"):
     st.subheader(f"📖 Books Rated by User #{short_id}")
-
     user_rated_ids = ratings[ratings['user_id'] == user_id]['book_id'].tolist()
     user_rated_df = ratings[ratings['user_id'] == user_id].merge(books, on='book_id')
     rated_view = user_rated_df[['title', 'author', 'rating']].copy()
@@ -101,7 +98,7 @@ if st.button("🔍 Get Recommendations"):
         st.dataframe(rated_view.reset_index(drop=True), use_container_width=True)
 
         st.markdown("### 📊 How You Usually Rate Books")
-        st.caption("This chart shows how often you gave each rating (1 = worst, 10 = best)")
+        st.caption("This shows how often you gave each rating (1 = dislike, 10 = love)")
         fig1 = px.histogram(
             rated_view,
             x='Your Rating',
@@ -109,18 +106,13 @@ if st.button("🔍 Get Recommendations"):
             title="How Often You Gave Each Rating",
             labels={"Your Rating": "Rating You Gave", "count": "Number of Books"}
         )
-        fig1.update_layout(
-            xaxis_title="Rating You Gave (1–10)",
-            yaxis_title="Number of Books",
-            bargap=0.1
-        )
+        fig1.update_layout(xaxis_title="Rating (1–10)", yaxis_title="Number of Books", bargap=0.1)
         st.plotly_chart(fig1, use_container_width=True)
     else:
         st.info("This user has not rated any books.")
 
     st.markdown("---")
     st.subheader(f"📘 Top 10 Recommended Books for User #{short_id}")
-
     unseen_df = books[
         (~books['book_id'].isin(user_rated_ids)) &
         (books['book_id'].isin(popular_books))
@@ -131,7 +123,6 @@ if st.button("🔍 Get Recommendations"):
     else:
         unseen_df = unseen_df.sample(min(1000, len(unseen_df)), random_state=42)
         test_df = pd.DataFrame({'user_id': [user_id] * len(unseen_df), 'book_id': unseen_df['book_id'].tolist()})
-
         with st.spinner("⚙️ Predicting ratings..."):
             try:
                 preds = learn.get_preds(dl=learn.dls.test_dl(test_df))[0].squeeze().tolist()
@@ -148,23 +139,19 @@ if st.button("🔍 Get Recommendations"):
             st.dataframe(top_view.reset_index(drop=True), use_container_width=True)
 
             st.markdown("### 📊 How the AI Thinks You'll Rate New Books")
-            st.caption("This chart shows the model’s guesses for how you’ll rate books you haven’t read yet")
+            st.caption("These are predicted scores for books you haven't rated yet")
             fig2 = px.histogram(
                 unseen_df,
                 x='predicted_rating',
                 nbins=20,
-                title="Predicted Ratings for Books You Haven't Seen Yet",
+                title="Predicted Ratings for Unseen Books",
                 labels={"predicted_rating": "AI-Predicted Rating", "count": "Number of Books"}
             )
-            fig2.update_layout(
-                xaxis_title="AI-Predicted Rating (1–10)",
-                yaxis_title="Number of Books",
-                bargap=0.1
-            )
+            fig2.update_layout(xaxis_title="Predicted Rating (1–10)", yaxis_title="Number of Books", bargap=0.1)
             st.plotly_chart(fig2, use_container_width=True)
         else:
             st.warning("No recommendations could be generated.")
 
-# --- Reset Button ---
+# --- Reset ---
 if st.button("🔄 Reset User Selection"):
     st.experimental_rerun()
